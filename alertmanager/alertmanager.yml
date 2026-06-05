@@ -1,0 +1,47 @@
+global:
+  # Default SMTP settings
+  smtp_smarthost: "${ALERTMANAGER_SMTP_HOST}"
+  smtp_from: "${ALERTMANAGER_SMTP_FROM}"
+  smtp_auth_username: "${ALERTMANAGER_SMTP_USERNAME}"
+  smtp_auth_password: "${ALERTMANAGER_SMTP_PASSWORD}"
+  smtp_require_tls: true
+
+  # How long to wait before sending a resolved notification
+  resolve_timeout: 5m
+
+# ─── Template Files ──────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# ─── Routing Rules ───────────────────────────────────────
+route:
+  group_by: ["alertname", "job"]
+  group_wait: 30s           # Tunggu 30s sebelum kirim, kalau ada alert lain yang mau di-group
+  group_interval: 5m        # Interval kirim untuk group yang sudah ada
+  repeat_interval: 4h       # Ulangi alert jika masih belum resolved setelah 4 jam
+  receiver: "email-alert"
+
+  routes:
+    # Critical alerts → kirim segera
+    - match:
+        severity: critical
+      receiver: "email-alert"
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Warning alerts → kirim tapi less urgent
+    - match:
+        severity: warning
+      receiver: "email-alert"
+      group_wait: 1m
+      repeat_interval: 6h
+
+# ─── Receivers ───────────────────────────────────────────
+receivers:
+  - name: "email-alert"
+    email_configs:
+      - to: "${ALERTMANAGER_EMAIL_TO}"
+        send_resolved: true          # Kirim email juga saat alert resolved
+        html: '{{ template "email.html" . }}'
+        headers:
+          Subject: '{{ template "email.subject" . }}'

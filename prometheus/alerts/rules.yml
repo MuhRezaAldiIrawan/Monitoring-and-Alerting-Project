@@ -1,0 +1,103 @@
+groups:
+  # ─── Service Health Alerts ──────────────────────────────
+  - name: service_health
+    rules:
+      # Service Down (health gauge = 0)
+      - alert: ServiceDown
+        expr: app_alpha_service_health == 0 OR app_beta_service_health == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Service DOWN: {{ $labels.job }}"
+          description: |
+            Service **{{ $labels.job }}** telah DOWN selama lebih dari 30 detik.
+            Waktu deteksi: {{ $value }}
+            Segera periksa service tersebut.
+
+      # Prometheus tidak bisa scrape service (service benar-benar mati)
+      - alert: ServiceUnreachable
+        expr: up{job=~"app-alpha|app-beta"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Service Unreachable: {{ $labels.job }}"
+          description: |
+            Prometheus tidak dapat mengakses metrics endpoint dari **{{ $labels.job }}**.
+            Service kemungkinan besar DOWN total.
+
+  # ─── Performance Alerts ─────────────────────────────────
+  - name: performance
+    rules:
+      # High response time > 500ms
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            rate(app_alpha_http_request_duration_seconds_bucket[5m])
+          ) > 0.5
+          OR
+          histogram_quantile(0.95,
+            rate(app_beta_http_request_duration_seconds_bucket[5m])
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Response time tinggi: {{ $labels.job }}"
+          description: |
+            P95 response time pada **{{ $labels.job }}** melebihi 500ms.
+            Nilai saat ini: {{ $value | humanizeDuration }}
+
+      # High error rate > 5%
+      - alert: HighErrorRate
+        expr: |
+          rate(app_alpha_http_requests_total{status_code=~"5.."}[5m])
+          / rate(app_alpha_http_requests_total[5m]) > 0.05
+          OR
+          rate(app_beta_http_requests_total{status_code=~"5.."}[5m])
+          / rate(app_beta_http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Error rate tinggi: {{ $labels.job }}"
+          description: |
+            Error rate 5xx pada **{{ $labels.job }}** melebihi 5%.
+            Nilai saat ini: {{ $value | humanizePercentage }}
+
+  # ─── System Resource Alerts ─────────────────────────────
+  - name: system_resources
+    rules:
+      # High CPU usage > 85%
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ CPU Usage tinggi"
+          description: "CPU usage melebihi 85%. Nilai: {{ $value | humanize }}%"
+
+      # Low disk space < 20% remaining
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Disk space hampir penuh"
+          description: "Disk space tersisa kurang dari 20%. Tersisa: {{ $value | humanize }}%"
+
+      # High memory usage > 90%
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Memory usage kritis"
+          description: "Memory usage melebihi 90%. Nilai: {{ $value | humanize }}%"

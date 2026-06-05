@@ -1,0 +1,204 @@
+version: "3.8"
+
+services:
+  # ─────────────────────────────────────────
+  # Uptime Kuma — Monitoring Dashboard
+  # Access: http://localhost:3000
+  # ─────────────────────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3000:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    networks:
+      - monitoring-net
+    environment:
+      - UPTIME_KUMA_PORT=3001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    networks:
+      - monitoring-net
+    depends_on:
+      - app-alpha
+      - app-beta
+
+  # ─────────────────────────────────────────────────────────
+  # Alertmanager — Alert routing & email notifications
+  # Access: http://localhost:9093
+  # ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tmpl:ro
+      - ./alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager-data:/alertmanager
+    environment:
+      - ALERTMANAGER_SMTP_HOST=${ALERTMANAGER_SMTP_HOST}
+      - ALERTMANAGER_SMTP_FROM=${ALERTMANAGER_SMTP_FROM}
+      - ALERTMANAGER_SMTP_USERNAME=${ALERTMANAGER_SMTP_USERNAME}
+      - ALERTMANAGER_SMTP_PASSWORD=${ALERTMANAGER_SMTP_PASSWORD}
+      - ALERTMANAGER_EMAIL_TO=${ALERTMANAGER_EMAIL_TO}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "envsubst < /etc/alertmanager/alertmanager.yml.tmpl > /tmp/alertmanager.yml && /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager --web.external-url=http://localhost:9093"
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3030:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3030
+      # SMTP untuk alert dari Grafana (opsional, selain Alertmanager)
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${GF_SMTP_HOST}
+      - GF_SMTP_USER=${GF_SMTP_USER}
+      - GF_SMTP_PASSWORD=${GF_SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS}
+      - GF_SMTP_FROM_NAME=TechCorp Grafana
+    networks:
+      - monitoring-net
+    depends_on:
+      - prometheus
+
+  # ─────────────────────────────────────────────────────────
+  # Node Exporter — Host system metrics (CPU, RAM, Disk)
+  # Metrics: http://localhost:9100/metrics
+  # ─────────────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - monitoring-net
+
+  # ─────────────────────────────────────────
+  # App Alpha — E-Commerce API Service
+  # Access: http://localhost:4001
+  # Health: http://localhost:4001/health
+  # ─────────────────────────────────────────
+  app-alpha:
+    build:
+      context: ./app-alpha
+      dockerfile: Dockerfile
+    container_name: app-alpha
+    restart: unless-stopped
+    ports:
+      - "4001:3001"
+    networks:
+      - monitoring-net
+    environment:
+      - PORT=3001
+      - APP_NAME=E-Commerce API (Alpha)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────
+  # App Beta — Payment Gateway Service
+  # Access: http://localhost:4002
+  # Health: http://localhost:4002/health
+  # ─────────────────────────────────────────
+  app-beta:
+    build:
+      context: ./app-beta
+      dockerfile: Dockerfile
+    container_name: app-beta
+    restart: unless-stopped
+    ports:
+      - "4002:3002"
+    networks:
+      - monitoring-net
+    environment:
+      - PORT=3002
+      - APP_NAME=Payment Gateway (Beta)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────
+  # Status Page — Public Status Dashboard
+  # Access: http://localhost:8080
+  # ─────────────────────────────────────────
+  status-page:
+    image: nginx:alpine
+    container_name: status-page
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./status-page/index.html:/usr/share/nginx/html/index.html:ro
+      - ./status-page/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - monitoring-net
+    depends_on:
+      - app-alpha
+      - app-beta
+
+volumes:
+  uptime-kuma-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  monitoring-net:
+    driver: bridge
