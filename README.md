@@ -1,6 +1,7 @@
 # 🖥️ Monitoring Stack — Setup Guide
 
 Stack ini terdiri dari:
+
 - **Uptime Kuma** — monitoring dashboard & alert engine
 - **App Alpha** — simulasi E-Commerce API service
 - **App Beta** — simulasi Payment Gateway service
@@ -11,7 +12,7 @@ Stack ini terdiri dari:
 ## 🚀 Quick Start
 
 ```bash
-# Clone atau masuk ke folder project
+# Clone atau masuk ke folder project Monitoring
 cd monitoring-project
 
 # Build dan jalankan semua service
@@ -22,21 +23,24 @@ docker compose ps
 ```
 
 ### Service URLs setelah running:
-| Service | URL | Keterangan |
-|---|---|---|
-| Uptime Kuma | http://localhost:3000 | Dashboard monitoring |
-| App Alpha (health) | http://localhost:4001/health | E-Commerce API |
-| App Beta (health) | http://localhost:4002/health | Payment Gateway |
-| Status Page | http://localhost:8080 | Public status page |
+
+| Service            | URL                          | Keterangan           |
+| ------------------ | ---------------------------- | -------------------- |
+| Uptime Kuma        | http://localhost:3000        | Dashboard monitoring |
+| App Alpha (health) | http://localhost:4001/health | E-Commerce API       |
+| App Beta (health)  | http://localhost:4002/health | Payment Gateway      |
+| Status Page        | http://localhost:8080        | Public status page   |
 
 ---
 
 ## ⚙️ Setup Uptime Kuma (Pertama Kali)
 
 ### 1. Buka http://localhost:3000
+
 Buat akun admin pertama kali (username + password).
 
 ### 2. Tambah Monitor untuk App Alpha
+
 - Klik **"Add New Monitor"**
 - **Monitor Type**: HTTP(s)
 - **Friendly Name**: `E-Commerce API`
@@ -48,6 +52,7 @@ Buat akun admin pertama kali (username + password).
 - Klik **Save**
 
 ### 3. Tambah Monitor untuk App Beta
+
 - **Monitor Type**: HTTP(s)
 - **Friendly Name**: `Payment Gateway`
 - **URL**: `http://app-beta:3002/health`
@@ -59,12 +64,14 @@ Buat akun admin pertama kali (username + password).
 ## 📧 Setup Email Notification (Gmail)
 
 ### Langkah 1 — Siapkan Gmail App Password
+
 1. Buka https://myaccount.google.com/security
 2. Aktifkan **2-Step Verification** jika belum
 3. Masuk ke **"App passwords"**
 4. Generate password untuk "Mail" → **catat 16-digit password**
 
 ### Langkah 2 — Tambah Notification di Uptime Kuma
+
 1. Buka **Settings → Notifications**
 2. Klik **"Setup Notification"**
 3. Pilih type: **Email (SMTP)**
@@ -85,6 +92,7 @@ To Email      : recipient@gmail.com
 6. Klik **Save**
 
 ### Langkah 3 — Attach Notification ke Monitor
+
 1. Buka monitor **E-Commerce API**
 2. Edit → scroll ke **"Notifications"**
 3. Centang Gmail Alert
@@ -109,6 +117,7 @@ docker compose start app-alpha
 ```
 
 Atau toggle health endpoint via HTTP:
+
 ```bash
 # Set App Alpha jadi unhealthy (return 503)
 curl -X POST http://localhost:4001/admin/toggle-health
@@ -124,6 +133,7 @@ curl -X POST http://localhost:4001/admin/toggle-health
 Status page ada di `status-page/index.html`.
 
 **Untuk production**, update status page agar fetch data dari Uptime Kuma API:
+
 - Uptime Kuma punya **Status Page** built-in di Settings → Status Page
 - Atau bisa pakai API: `GET /api/status-page/heartbeat/:slug`
 
