@@ -12,7 +12,7 @@ Stack ini terdiri dari:
 ## 🚀 Quick Start
 
 ```bash
-# Clone atau masuk ke folder project Monitoring updated second
+# Clone atau masuk ke folder project Monitoring
 cd monitoring-project
 
 # Build dan jalankan semua service
